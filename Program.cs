@@ -40,11 +40,11 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapPost("/login", (string username) =>
+app.MapPost("/login", (LoginRequest model) =>
 {
     var claims = new[]
     {
-        new Claim(ClaimTypes.Name, username)
+        new Claim(ClaimTypes.Name, model.Username)
     };
 
     var creds = new SigningCredentials(KEY, SecurityAlgorithms.HmacSha256);
@@ -59,7 +59,12 @@ app.MapPost("/login", (string username) =>
 
     for (int i = 1; i <= 3; i++)
     {
-        todos.Add(new Todo { CreatedBy = username, CreatedAt = DateTime.Now, Name = $"Example ToDo task #{i}" });
+        todos.Add(new Todo
+        {
+            CreatedBy = model.Username,
+            CreatedAt = DateTime.Now.AddHours(-i).AddMinutes(-17 * i).AddSeconds(31 * i),
+            Title = $"{model.Username}'s example ToDo task #{i}"
+        });
     }
 
     return Results.Ok(new
@@ -71,7 +76,7 @@ app.MapPost("/login", (string username) =>
 app.MapGet("/todos", (HttpContext context) =>
 {
     var user = context.User.Identity.Name;
-    return todos.Where(t => t.CreatedBy == user).Select(e => new TodoDto(e));
+    return todos.Where(t => t.CreatedBy == user).OrderBy(e => e.Done).Select(e => new TodoDto(e));
 }).RequireAuthorization();
 
 app.MapPost("/todos", (TodoDto todo, HttpContext context) =>
@@ -89,6 +94,7 @@ app.MapDelete("/todos/{id}", (int id) =>
         todos.Remove(todo);
         return Results.NoContent();
     }
+
     return Results.NotFound();
 }).RequireAuthorization();
 
@@ -97,7 +103,7 @@ app.MapPut("/todos/{id}/toggle", (int id) =>
     var todo = todos.SingleOrDefault(e => e.Id == id);
     if (todo is null)
     {
-    return Results.NotFound();
+        return Results.NotFound();
     }
 
     todo.Done = !todo.Done;
@@ -110,22 +116,22 @@ public record Todo
 {
     private static int _id = 0;
     public int Id = _id++;
-    public string Name { get; init; }
+    public string Title { get; init; }
     public string CreatedBy { get; init; }
     public DateTime CreatedAt { get; init; }
     public bool Done { get; set; }
 
     public Todo(TodoDto todo, string user)
     {
-        Name = todo.Name;
+        Title = todo.Title;
         CreatedAt = DateTime.Now;
         CreatedBy = user;
         Done = todo.Done;
     }
 
-    public Todo(string name, string createdBy, DateTime createdAt, bool done)
+    public Todo(string title, string createdBy, DateTime createdAt, bool done)
     {
-        Name = name;
+        Title = title;
         CreatedBy = createdBy;
         CreatedAt = createdAt;
         Done = done;
@@ -139,21 +145,21 @@ public record Todo
 public record TodoDto
 {
     public int Id { get; init; }
-    public string Name { get; init; }
+    public string Title { get; init; }
     public DateTime CreatedAt { get; init; }
     public bool Done { get; init; }
 
     public TodoDto(Todo todo)
     {
         Id = todo.Id;
-        Name = todo.Name;
+        Title = todo.Title;
         CreatedAt = todo.CreatedAt;
         Done = todo.Done;
     }
 
-    public TodoDto(string name, DateTime createdAt, bool done)
+    public TodoDto(string title, DateTime createdAt, bool done)
     {
-        Name = name;
+        Title = title;
         CreatedAt = createdAt;
         Done = done;
     }
@@ -162,3 +168,5 @@ public record TodoDto
     {
     }
 }
+
+public record LoginRequest(string Username);
